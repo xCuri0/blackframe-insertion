@@ -37,6 +37,8 @@ WARNING : This program causes flickers on screen which are (fps / 2) and may be 
 int black = 0;
 
 void (*_glXSwapBuffers)(Display* dpy, GLXDrawable drawable);
+void (*(*_glXGetProcAddressARB)(const GLubyte *procName))();
+
 void *_dl_sym(void *, const char *, void *);
 
 void blackframe(){
@@ -57,6 +59,16 @@ void glXSwapBuffers(Display* dpy, GLXDrawable drawable)
     blackframe();
     _glXSwapBuffers(dpy,drawable);
 }
+void (*(glXGetProcAddressARB)(const GLubyte *procName))()
+{
+    if (_glXGetProcAddressARB == NULL)
+        _glXGetProcAddressARB = _dl_sym(RTLD_NEXT, "glXGetProcAddressARB",glXSwapBuffers);
+    if(!strcmp((const char*) procName, "glXSwapBuffers")) {
+	return (void (*)()) glXSwapBuffers;
+    }
+
+    return _glXGetProcAddressARB(procName);
+}
 
 // hacking dlsym is required for some OpenGL applications (GLFW ?)
 void *dlsym(void *handle, const char *name)
@@ -69,7 +81,8 @@ void *dlsym(void *handle, const char *name)
         return (void*)dlsym; // Override dlsym with our dlsym
     if (!strcmp(name,"glXSwapBuffers")) 
         return (void*)glXSwapBuffers; // Override glXSwapBuffers
+    if (!strcmp(name,"glXGetProcAddressARB"))
+        return (void*)glXGetProcAddressARB; // Override glXSwapBuffers
     
     return real_dlsym(handle,name);
 }
-
