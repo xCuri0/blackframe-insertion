@@ -32,11 +32,14 @@ WARNING : This program causes flickers on screen which are (fps / 2) and may be 
  
 #define _GNU_SOURCE
 #include <dlfcn.h>
+#include <string.h>
 #include <GL/glx.h>
+#include <EGL/egl.h>
 
 int black = 0;
 
 void (*_glXSwapBuffers)(Display* dpy, GLXDrawable drawable);
+EGLBoolean (*_eglSwapBuffers)(EGLDisplay display, EGLSurface surface);
 void (*(*_glXGetProcAddressARB)(const GLubyte *procName))();
 
 void *_dl_sym(void *, const char *, void *);
@@ -59,13 +62,24 @@ void glXSwapBuffers(Display* dpy, GLXDrawable drawable)
     blackframe();
     _glXSwapBuffers(dpy,drawable);
 }
+EGLBoolean eglSwapBuffers(EGLDisplay display, EGLSurface surface)
+{
+    if (_eglSwapBuffers == NULL)
+        _eglSwapBuffers = _dl_sym(RTLD_NEXT, "eglSwapBuffers",eglSwapBuffers);
+
+    blackframe();
+
+    return _eglSwapBuffers(display, surface);
+}
+
 void (*(glXGetProcAddressARB)(const GLubyte *procName))()
 {
     if (_glXGetProcAddressARB == NULL)
         _glXGetProcAddressARB = _dl_sym(RTLD_NEXT, "glXGetProcAddressARB",glXSwapBuffers);
-    if(!strcmp((const char*) procName, "glXSwapBuffers")) {
-	return (void (*)()) glXSwapBuffers;
-    }
+    if(!strcmp((const char*) procName, "glXSwapBuffers"))
+        return (void (*)()) glXSwapBuffers;
+    else if(!strcmp((const char*) procName, "eglSwapBuffers"))
+        return (void (*)()) eglSwapBuffers;
 
     return _glXGetProcAddressARB(procName);
 }
